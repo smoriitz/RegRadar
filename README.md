@@ -1,34 +1,50 @@
-# RegRadar: Regulatory Impact Agent
+# RegRadar Agent
 
 **Betrifft uns diese Regulierung, und was müssen wir tun?**
-RegRadar liest einen Regulierungstext (z. B. den EU AI Act), gleicht ihn mit einem Bankprofil ab und liefert ein Urteil, betroffene Funktionen und einen Maßnahmenplan. Jede Aussage trägt ihre Artikelreferenz, und jedes Zitat wird automatisch gegen den Quelltext geprüft.
+RegRadar ist ein autonomer Agent für Banken. Er bekommt einen Regulierungstext (z. B. den EU AI Act) und ein Bankprofil, arbeitet sich mit Werkzeugen selbst durch den Text und liefert ein Urteil, betroffene Funktionen und einen Maßnahmenplan. Jede Aussage trägt ihre Artikelreferenz, und jedes Zitat wird geprüft.
 
-Gebaut für die zeb Agent League (Domäne: Own idea / Knowledge management).
+Gebaut für die zeb Agent League.
 
-## Features
+## Wie der Agent arbeitet
 
-- **Gegroundet:** Claude nutzt nur den eingefügten Text. Was fehlt, wird als *Not in source* markiert (keine erfundenen Bußgelder oder Fristen).
-- **Zitat-Check:** Jede Provision enthält ein wörtliches Zitat, das im Browser gegen die Quelle geprüft wird (✓ / ⚠). Ein Klick auf eine Referenz oder ein Zitat springt zur Stelle im Text.
-- **Live mit Claude:** Mit eigenem Anthropic API-Key über Claude Opus 5.5, Sonnet 5.5 oder Haiku 5.5, mit garantiert gültigem JSON (Structured Outputs).
-- Der EU-AI-Act-Auszug ist vorausgefüllt; eigene Texte können eingefügt oder als `.txt`/`.md` geladen werden.
-- Ausgabe auf Englisch oder Deutsch, Export als Markdown oder PDF.
+Der Agent sieht Regulierung und Bankprofil nicht direkt, sondern nur über Werkzeuge, die im Browser laufen:
 
-## Auf GitHub Pages veröffentlichen
+| Werkzeug | Was es tut |
+|---|---|
+| `get_bank_profile` | liest das Bankprofil |
+| `list_provisions` | Inhaltsverzeichnis der Regulierung (Artikel, Absätze, Annex-Punkte werden automatisch erkannt) |
+| `search_regulation` | Stichwortsuche mit Textausschnitten |
+| `read_provisions` | Volltext einzelner Vorschriften |
+| `verify_citations` | prüft, ob ein Zitat wörtlich in der genannten Vorschrift steht |
 
-1. Branch nach `main` mergen (oder den Branch direkt als Quelle wählen).
-2. Im Repo: **Settings → Pages → Build and deployment → Source: Deploy from a branch**.
-3. Branch `main`, Ordner `/ (root)` wählen und speichern.
-4. Nach ca. 1 Minute ist die Seite unter `https://<user>.github.io/RegRadar/` erreichbar.
+Ablauf: Profil und Inhaltsverzeichnis lesen → relevante Vorschriften inkl. Ausnahmen lesen → Urteil bilden → alle Zitate verifizieren → Ergebnis abgeben. Jeder Schritt erscheint live im **Agent-Trace**. Im API-Modus prüft die App die Abgabe zusätzlich und schickt sie bei falschen Zitaten oder Referenzen zur Korrektur zurück.
 
-Es gibt keinen Build-Schritt. Die Seite besteht nur aus statischen Dateien.
+## Zwei Wege, die App zu nutzen
 
-## API-Key eintragen
+**1. Auf claude.ai (ohne API-Key, für den Pitch):**
+https://claude.ai/artifact/TePLWdDgv2ZzG5sgEz6nhe
+Der Agent läuft über den Claude-Account der Person, die die Seite öffnet. Beim ersten Lauf fragt claude.ai einmal, ob die Seite Claude nutzen darf. Das Artifact ist zunächst privat: Zum Teilen oben auf der Seite **Share** verwenden.
 
-1. API-Key unter [platform.claude.com](https://platform.claude.com) erstellen.
-2. Auf der Seite oben rechts auf **⚙ Add API key** klicken, den Key eintragen und speichern.
-3. Der Key bleibt im Browser (Session oder optional localStorage) und geht nur an `api.anthropic.com`.
+**2. Auf GitHub Pages (mit eigenem API-Key):**
+Ohne `window.claude` braucht die Seite einen Anthropic API-Key (⚙ oben rechts). Der Key bleibt im Browser und geht nur an `api.anthropic.com`. Ohne Key verweist die Seite auf die claude.ai-Version.
 
-> ⚠️ **Niemals einen API-Key ins Repository committen.** Die Seite ist öffentlich. Für Live-Demos am besten einen eigenen Key mit niedrigem Ausgabelimit verwenden.
+## Demo-Texte
+
+`demo/RegRadar_Demo-Texte.docx` enthält den AI-Act-Auszug und die drei Testfälle zum manuellen Einfügen im Pitch:
+
+| # | Fall | Erwartung |
+|---|---|---|
+| 1 | Regionalbank mit ML-Kreditscoring | **Affected**: High-risk nach Annex III 5(b), FRIA nach Art. 27(1) |
+| 2 | Verwahrbank, keine Kredite, nur Fraud-KI | **Not affected**: Fraud-Ausnahme in Annex III 5(b) |
+| 3 | Edge Case: Frage nach Bußgeld und Stichtag | **Affected**, Antwort *Not in source* (nichts erfunden) |
+
+## GitHub Pages einrichten
+
+1. Branch nach `main` mergen.
+2. **Settings → Pages → Deploy from a branch**, Branch `main`, Ordner `/ (root)`.
+3. Nach ca. 1 Minute: `https://<user>.github.io/RegRadar/`
+
+> ⚠️ Niemals einen API-Key ins Repository committen.
 
 ## Lokal starten
 
@@ -36,18 +52,18 @@ Es gibt keinen Build-Schritt. Die Seite besteht nur aus statischen Dateien.
 python3 -m http.server 8000
 ```
 
-Dann `http://localhost:8000` öffnen. Wegen der ES-Module funktioniert ein direktes Öffnen per `file://` nicht.
-
 ## Dateien
 
 | Datei | Inhalt |
 |---|---|
-| `index.html` | Seitenstruktur |
-| `styles.css` | Design (inkl. Print-Layout) |
-| `app.js` | Prompt, JSON-Schema, Claude-Aufruf, Zitat-Check, Rendering |
-| `data.js` | Vorausgefüllter AI-Act-Auszug |
-| `vendor/anthropic-sdk.mjs` | Gebündeltes offizielles Anthropic TypeScript SDK (v1.4.0, MIT) |
+| `index.html`, `styles.css` | Seite und Design |
+| `app.js` | Agent-Prompt, Werkzeuge, beide Engines (claude.ai und API), Zitat-Check, Rendering |
+| `tools/build-artifact.py` | baut daraus die Ein-Datei-Version für claude.ai (`dist/regradar-artifact.html`) |
+| `demo/RegRadar_Demo-Texte.docx` | Demo-Texte für den Pitch |
+| `vendor/anthropic-sdk.mjs` | gebündeltes offizielles Anthropic SDK (v1.4.0, MIT), nur für den API-Modus |
+
+Nach Änderungen an `index.html`, `styles.css` oder `app.js`: `python3 tools/build-artifact.py` ausführen und `dist/regradar-artifact.html` erneut als Artifact veröffentlichen.
 
 ## Hinweis
 
-Der Regulierungsauszug ist für Demozwecke gekürzt. Prüft alles gegen den offiziellen Text auf EUR-Lex. Das hier ist keine Rechtsberatung.
+Ergebnisse immer gegen den offiziellen Text auf EUR-Lex prüfen. Keine Rechtsberatung.
