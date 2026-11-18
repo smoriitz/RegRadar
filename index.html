@@ -25,14 +25,14 @@
       <div><b id="kVer">–</b><span>Quotes verified</span></div>
       <div><b id="kActs">–</b><span>Actions</span></div>
     </div>
-    <button class="mode" id="modeBtn" title="Settings: API key, model, language"><span class="dot"></span><span id="modeTxt">Demo mode</span> ⚙</button>
+    <button class="mode" id="modeBtn" title="Settings: API key, model, language"><span class="dot"></span><span id="modeTxt">Add API key</span> ⚙</button>
   </div>
 </header>
 
 <dialog id="settings">
   <form method="dialog" class="dlg">
     <h2>Settings</h2>
-    <p class="muted small">Without a key, RegRadar runs in <b>demo mode</b> and shows pre-computed reference results for the three test cases. With a key, every run is a live call to Claude.</p>
+    <p class="muted small">RegRadar needs your own Anthropic API key. Every run is a live call to Claude.</p>
     <label class="lbl" for="apiKey">Anthropic API key</label>
     <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
     <label class="chk"><input type="checkbox" id="remember"> Remember on this device (localStorage)</label>
@@ -56,16 +56,13 @@
 
 <main>
   <section class="card" id="inputs">
-    <p class="label">Test cases <button class="link" id="benchBtn" title="Run all three test cases and check them against the expected outcome">▶ Run benchmark</button></p>
-    <div class="tests" id="tests"></div>
-
     <div class="field">
       <p class="label">1 · Regulation text <span class="src-note"><span id="srcInfo"></span> · <label class="link" for="file">load .txt / .md</label><input type="file" id="file" accept=".txt,.md,text/plain" hidden></span></p>
       <textarea id="src" spellcheck="false"></textarea>
     </div>
     <div class="field">
       <p class="label">2 · Bank profile</p>
-      <textarea id="profile"></textarea>
+      <textarea id="profile" placeholder="e.g. German regional savings bank, ~200,000 private clients. Uses an in-house ML model to score the creditworthiness of private individuals for consumer loans."></textarea>
     </div>
     <div class="field">
       <p class="label">3 · Specific question <span class="src-note">optional</span></p>
@@ -77,7 +74,7 @@
   </section>
 
   <section class="card" id="out" aria-live="polite">
-    <div id="empty"><div class="big">◎</div><div><b>No analysis yet.</b><br>Pick a test case and hit <b>Run impact analysis</b>.</div></div>
+    <div id="empty"><div class="big">◎</div><div><b>No analysis yet.</b><br>Add your API key (⚙ top right), describe the bank and hit <b>Run impact analysis</b>.</div></div>
     <div id="loading" hidden>
       <div class="timer" id="timer">0.0 s</div>
       <ul class="steps" id="steps">
@@ -88,7 +85,6 @@
         <li>Drafting action plan with citations</li>
       </ul>
     </div>
-    <div id="bench" hidden></div>
     <div id="result" hidden></div>
   </section>
 </main>

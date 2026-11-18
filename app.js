@@ -1,6 +1,6 @@
 // RegRadar: regulatory impact agent (static site, runs fully in the browser)
 import Anthropic from "./vendor/anthropic-sdk.mjs";
-import { AI_ACT, TESTS, DEMO } from "./data.js";
+import { AI_ACT } from "./data.js";
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -89,7 +89,7 @@ function refreshMode() {
   const live = !!settings.key;
   $("modeBtn").classList.toggle("live", live);
   const short = { "claude-opus-5-5": "Opus 5.5", "claude-sonnet-5-5": "Sonnet 5.5", "claude-haiku-5-5": "Haiku 5.5" }[settings.model];
-  $("modeTxt").textContent = live ? `Live · ${short}` : "Demo mode";
+  $("modeTxt").textContent = live ? `Live · ${short}` : "Add API key";
 }
 $("modeBtn").onclick = () => $("settings").showModal();
 $("settings").addEventListener("close", () => {
@@ -103,19 +103,10 @@ $("clearKey").onclick = () => { $("apiKey").value = ""; store.del("rr_key"); $("
 refreshMode();
 
 /* ------------------------------------------------------------------ */
-/* Inputs + test cases                                                 */
+/* Inputs                                                              */
 /* ------------------------------------------------------------------ */
 
-let current = 1;
-$("tests").innerHTML = Object.entries(TESTS).map(([n, t]) =>
-  `<button class="tbtn" data-t="${n}"><b>${n} · ${esc(t.name)}</b>${esc(t.sub)}</button>`).join("");
-function loadTest(n) {
-  current = n;
-  document.querySelectorAll(".tbtn").forEach((b) => b.classList.toggle("on", +b.dataset.t === n));
-  $("src").value = AI_ACT; $("profile").value = TESTS[n].profile; $("question").value = TESTS[n].q;
-  srcInfo();
-}
-document.querySelectorAll(".tbtn").forEach((b) => (b.onclick = () => loadTest(+b.dataset.t)));
+$("src").value = AI_ACT;
 function srcInfo() {
   const v = $("src").value;
   const words = v.trim() ? v.trim().split(/\s+/).length : 0;
@@ -125,9 +116,8 @@ $("src").addEventListener("input", srcInfo);
 $("file").onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
   $("src").value = await f.text(); srcInfo(); e.target.value = "";
-  document.querySelectorAll(".tbtn").forEach((b) => b.classList.remove("on"));
 };
-loadTest(1);
+srcInfo();
 
 /* ------------------------------------------------------------------ */
 /* Claude call                                                         */
@@ -179,21 +169,10 @@ function friendlyError(e) {
   return e?.message || String(e);
 }
 
-/* One analysis run: live with a key, otherwise the pre-computed demo result. */
-async function analyse(input, testId) {
+async function analyse(input) {
   const t0 = performance.now();
-  if (settings.key) {
-    const r = await callClaude(input);
-    return { ...r, secs: (performance.now() - t0) / 1000, demo: false };
-  }
-  const t = TESTS[testId];
-  const unchanged = t && input.src === AI_ACT && input.profile === t.profile && input.q === t.q;
-  if (!unchanged) {
-    const err = new Error("Demo mode only covers the three unchanged test cases. Add an Anthropic API key in ⚙ settings to analyse your own text.");
-    err.needsKey = true; throw err;
-  }
-  await new Promise((r) => setTimeout(r, 2200 + Math.random() * 900));
-  return { data: structuredClone(DEMO[testId]), secs: (performance.now() - t0) / 1000, demo: true, model: "pre-computed reference" };
+  const r = await callClaude(input);
+  return { ...r, secs: (performance.now() - t0) / 1000 };
 }
 
 /* ------------------------------------------------------------------ */
@@ -250,7 +229,7 @@ function render(run, src) {
     </div>
     <div class="verdict ${cls}"><span class="tag">${esc(d.verdict)}</span><div><h2>${esc(d.classification)}</h2><p>${esc(d.verdict_reason)}</p></div></div>
     <div class="meta">
-      ${run.demo ? `<span class="pill demo" title="No API key set: this is the stored reference result for this test case">Demo result (pre-computed)</span>` : `<span class="pill">Model: <b>${esc(run.model)}</b></span>`}
+      <span class="pill">Model: <b>${esc(run.model)}</b></span>
       <span class="pill">Role: <b>${esc(d.role || "n/a")}</b></span>
       <span class="pill">Time: <b>${run.secs.toFixed(1)} s</b></span>
       <span class="pill">Quotes verified: <b class="${verified === d.provisions.length ? "ok" : "no"}">${verified}/${d.provisions.length}</b></span>
@@ -337,20 +316,20 @@ function highlight(ref, quote) {
 /* ------------------------------------------------------------------ */
 
 let stepTimer, clock;
-function show(which) { ["empty", "loading", "bench", "result"].forEach((id) => ($(id).hidden = id !== which)); }
-function startLoading(label) {
+function show(which) { ["empty", "loading", "result"].forEach((id) => ($(id).hidden = id !== which)); }
+function startLoading() {
   show("loading"); $("err").style.display = "none";
   const lis = [...$("steps").children]; lis.forEach((l) => (l.className = "")); lis[0].className = "act";
   let i = 0; const t0 = performance.now();
-  clock = setInterval(() => ($("timer").textContent = ((performance.now() - t0) / 1000).toFixed(1) + " s" + (label ? ` · ${label}` : "")), 100);
-  const every = settings.key ? 3500 : 500;
+  clock = setInterval(() => ($("timer").textContent = ((performance.now() - t0) / 1000).toFixed(1) + " s"), 100);
+  const every = 3500;
   stepTimer = setInterval(() => { if (i < lis.length - 1) { lis[i].className = "done"; lis[++i].className = "act"; } }, every);
 }
 function stopLoading() { clearInterval(stepTimer); clearInterval(clock); }
 function showErr(html) { $("err").innerHTML = html; $("err").style.display = "block"; }
 
 function busy(on) {
-  $("go").disabled = on; $("benchBtn").disabled = on;
+  $("go").disabled = on;
   $("go").textContent = on ? "◎ Scanning…" : "◎ Run impact analysis";
 }
 
@@ -361,82 +340,25 @@ function busy(on) {
 async function run() {
   const input = { src: $("src").value.trim(), profile: $("profile").value.trim(), q: $("question").value.trim() };
   if (!input.src || !input.profile) { showErr("Please provide regulation text and a bank profile."); return; }
-  // compare against untrimmed originals for demo matching
-  const raw = { src: $("src").value, profile: $("profile").value, q: $("question").value };
-  const testId = document.querySelector(".tbtn.on") ? current : null;
+  if (!settings.key) {
+    showErr(`Please add your Anthropic API key first. <br><button class="sbtn" id="openSet">Open settings</button>`);
+    $("openSet").onclick = () => $("settings").showModal();
+    $("settings").showModal();
+    return;
+  }
   busy(true); startLoading();
   try {
-    const r = await analyse(settings.key ? input : raw, testId);
+    const r = await analyse(input);
     stopLoading();
-    if (!r.demo) try { localStorage.setItem("rr_last", JSON.stringify({ r, src: input.src })); } catch {}
+    try { localStorage.setItem("rr_last", JSON.stringify({ r, src: input.src })); } catch {}
     render(r, input.src);
   } catch (e) {
     stopLoading();
     show(lastRun ? "result" : "empty");
-    if (e.needsKey) { showErr(esc(e.message) + ` <br><button class="sbtn" id="openSet">Open settings</button>`); $("openSet").onclick = () => $("settings").showModal(); }
-    else {
-      let backup = null; try { backup = JSON.parse(localStorage.getItem("rr_last")); } catch {}
-      showErr("Analysis failed: " + esc(friendlyError(e)) + (backup ? ` <br><button class="sbtn" id="bk">Show last successful run</button>` : ""));
-      if (backup) $("bk").onclick = () => { render(backup.r, backup.src); $("err").style.display = "none"; };
-    }
+    let backup = null; try { backup = JSON.parse(localStorage.getItem("rr_last")); } catch {}
+    showErr("Analysis failed: " + esc(friendlyError(e)) + (backup ? ` <br><button class="sbtn" id="bk">Show last successful run</button>` : ""));
+    if (backup) $("bk").onclick = () => { render(backup.r, backup.src); $("err").style.display = "none"; };
   } finally { busy(false); }
 }
 $("go").onclick = run;
 document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !$("go").disabled) run(); });
-
-/* ------------------------------------------------------------------ */
-/* Benchmark: the three test cases with expected outcomes              */
-/* ------------------------------------------------------------------ */
-
-const FIGURE = /(€|eur)\s?\d|\d[\d.,]*\s?(million|mio|%|percent)|\b\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+20\d\d|\b20\d\d-\d\d-\d\d/i;
-
-function checkCase(id, d) {
-  const e = TESTS[id].expect, checks = [];
-  const refList = [...(d.provisions || []), ...(d.functions || []), ...(d.actions || []), d.direct_answer || {}].map((x) => x.ref || "").filter(Boolean);
-  const refs = refList.join(" ");
-  checks.push([`Verdict is "${e.verdict}"`, d.verdict === e.verdict, d.verdict]);
-  e.mustCite.forEach((r) => checks.push([`Cites ${r}`, refs.includes(r)]));
-  const q = (d.provisions || []).filter((p) => p.quote);
-  checks.push(["All quotes verbatim in source", q.length > 0 && q.every((p) => quoteOk(p.quote, AI_ACT)), `${q.filter((p) => quoteOk(p.quote, AI_ACT)).length}/${q.length}`]);
-  checks.push(["All references exist in source", refList.every((r) => refFound(r, AI_ACT))]);
-  if (e.actionsEmpty) checks.push(["No functions / actions", !(d.functions || []).length && !(d.actions || []).length]);
-  else checks.push(["Action plan present", (d.actions || []).length > 0]);
-  if (e.noInventedFigures) {
-    const da = d.direct_answer || {};
-    checks.push(["Question answered with \"Not in source\"", isNIS(da.ref) || /not (stated|contained|included|in the)|nicht/i.test(da.answer || "")]);
-    checks.push(["No invented fines or dates", !FIGURE.test(`${da.answer} ${(d.exec_summary || []).join(" ")}`)]);
-  }
-  checks.push(["Exactly 3 exec bullets", (d.exec_summary || []).length === 3]);
-  return checks;
-}
-
-async function benchmark() {
-  busy(true); startLoading("benchmark: 3 cases");
-  const ids = Object.keys(TESTS).map(Number);
-  const results = await Promise.all(ids.map(async (id) => {
-    const t = TESTS[id];
-    try { return { id, ...(await analyse({ src: AI_ACT, profile: t.profile, q: t.q }, id)) }; }
-    catch (e) { return { id, error: friendlyError(e) }; }
-  }));
-  stopLoading(); busy(false);
-  let pass = 0, total = 0;
-  const cards = results.map((r) => {
-    const t = TESTS[r.id];
-    if (r.error) { total++; return `<div class="fn"><div><b>${r.id} · ${esc(t.name)}</b><span class="no">✗ ${esc(r.error)}</span></div></div>`; }
-    const c = checkCase(r.id, r.data); const p = c.filter((x) => x[1]).length; pass += p; total += c.length;
-    return `<tr><td><b>${r.id} · ${esc(t.name)}</b><br><span class="muted small">${esc(t.sub)}</span><br><button class="sbtn" data-open="${r.id}" style="margin-top:6px">Open result</button></td>
-      <td><b class="${p === c.length ? "ok" : "no"}">${p}/${c.length}</b> · ${r.secs.toFixed(1)} s</td>
-      <td><ul class="chks">${c.map(([n, ok, info]) => `<li class="${ok ? "ok" : "no"}">${ok ? "✓" : "✗"} <span style="color:var(--text)">${esc(n)}</span>${info ? ` <span class="muted">(${esc(info)})</span>` : ""}</li>`).join("")}</ul></td></tr>`;
-  });
-  const anyDemo = results.some((r) => r.demo);
-  show("bench");
-  $("bench").innerHTML = `<div class="bench"><h3>Benchmark · three test cases</h3>
-    <div class="score">${pass}/${total} checks passed</div>
-    <p class="muted small">${anyDemo ? "Demo mode: checks run against the pre-computed reference results. Add an API key to benchmark Claude live." : `Live run on ${esc(settings.model)}.`} Checks: expected verdict, required citations, verbatim quotes, no invented fines or dates.</p>
-    <div class="tbl-wrap"><table><tr><th>Case</th><th>Score</th><th>Checks</th></tr>${cards.join("")}</table></div></div>`;
-  $("bench").querySelectorAll("[data-open]").forEach((b) => (b.onclick = () => {
-    const r = results.find((x) => x.id === +b.dataset.open); loadTest(r.id); render(r, AI_ACT);
-  }));
-  $("kTime").textContent = Math.max(...results.map((r) => r.secs || 0)).toFixed(0) + " s";
-}
-$("benchBtn").onclick = benchmark;
