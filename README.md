@@ -5,6 +5,10 @@ RegRadar ist ein autonomer Agent für Banken. Er bekommt einen Regulierungstext 
 
 Gebaut für die zeb Agent League.
 
+## Autopilot (index.html, ohne API-Key)
+
+`index.html` ist der RegRadar Autopilot: Er analysiert und legt danach Tasks, Register-Eintrag, E-Mail und Termin zur Freigabe an. Für die drei Demo-Testfälle sind die Agent-Läufe vorab berechnet und werden live abgespielt, damit die Demo ohne API-Key funktioniert. Texte zum Einfügen: `demo/RegRadar_Demo-Texte.txt`, Pitch: `demo/Pitch.md`. Die Live-Agent-Version liegt unter `agent.html`.
+
 ## Wie der Agent arbeitet
 
 Der Agent sieht Regulierung und Bankprofil nicht direkt, sondern nur über Werkzeuge, die im Browser laufen:

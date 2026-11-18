@@ -3,100 +3,713 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RegRadar Agent</title>
-<meta name="description" content="RegRadar: does this regulation hit our bank, and what do we do? Grounded, citation-checked regulatory impact analysis powered by Claude.">
-<meta name="color-scheme" content="dark">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230b1020' stroke='%23b6f23d' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23b6f23d' stroke-opacity='.5'/%3E%3Cpath d='M16 16 L28 10' stroke='%23b6f23d' stroke-width='2.5'/%3E%3C/svg%3E">
+<title>RegRadar Autopilot</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<style>
+:root{
+  --bg:#0b1020; --panel:#121a33; --panel2:#18213f; --line:#26305a;
+  --text:#e8ecf8; --muted:#8f9bc2; --accent:#b6f23d; --accent2:#5ad1ff;
+  --red:#ff6b6b; --amber:#ffc24b; --green:#57e39b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;font-size:15px;line-height:1.5}
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;border-bottom:1px solid var(--line);background:linear-gradient(90deg,#0f1630,#0b1020)}
+.brand{display:flex;align-items:center;gap:14px}
+.radar{width:42px;height:42px;border-radius:50%;border:2px solid var(--accent);position:relative;overflow:hidden;box-shadow:0 0 18px rgba(182,242,61,.35)}
+.radar::before{content:"";position:absolute;inset:8px;border:1px solid rgba(182,242,61,.4);border-radius:50%}
+.radar::after{content:"";position:absolute;left:50%;top:50%;width:50%;height:2px;background:var(--accent);transform-origin:0 50%;animation:sweep 2.4s linear infinite}
+@keyframes sweep{to{transform:rotate(360deg)}}
+.brand h1{margin:0;font-size:22px;font-weight:800;letter-spacing:-.02em}
+.brand p{margin:0;color:var(--muted);font-size:13px}
+.kpi{display:flex;gap:22px}
+.kpi div{text-align:right}
+.kpi b{display:block;font-size:20px;color:var(--accent)}
+.kpi span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+main{display:grid;grid-template-columns:minmax(360px,0.9fr) 1.3fr;gap:22px;padding:22px 28px;max-width:1500px;margin:0 auto}
+@media(max-width:980px){main{grid-template-columns:1fr}.kpi{display:none}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;display:flex;justify-content:space-between;align-items:center}
+.tests{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.tbtn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px;text-align:left;cursor:pointer;font:inherit;font-size:12.5px;transition:.15s}
+.tbtn b{display:block;font-size:13px;color:var(--accent2)}
+.tbtn:hover{border-color:var(--accent2)}
+.tbtn.on{border-color:var(--accent);background:#1d2a2a}
+.tbtn.on b{color:var(--accent)}
+textarea{width:100%;background:#0d1328;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:13px;resize:vertical}
+textarea:focus{outline:none;border-color:var(--accent2)}
+#src{height:300px;font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.55}
+#profile{height:96px}
+#question{height:52px}
+.field{margin-bottom:14px}
+.go{width:100%;padding:14px;border:none;border-radius:12px;background:var(--accent);color:#0b1020;font:inherit;font-weight:800;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:.15s}
+.go:hover{filter:brightness(1.08)}
+.go:disabled{opacity:.6;cursor:wait}
+.hint{font-size:11.5px;color:var(--muted);margin-top:8px}
+.src-note{font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px}
+/* output */
+#empty{height:100%;min-height:420px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);text-align:center;gap:10px}
+#empty .big{font-size:44px}
+#loading{display:none;padding:30px 10px}
+.steps{list-style:none;padding:0;margin:0}
+.steps li{padding:9px 0;color:var(--muted);display:flex;gap:10px;align-items:center}
+.steps li.done{color:var(--text)}
+.steps li.done::before{content:"✓";color:var(--accent);font-weight:800}
+.steps li.act::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--accent2);animation:pulse 1s infinite}
+.steps li.wait::before{content:"";width:10px;height:10px;border-radius:50%;border:1px solid var(--line)}
+@keyframes pulse{50%{opacity:.3}}
+.trace{font-family:'JetBrains Mono',monospace;font-size:12px;background:#0d1328;border:1px solid var(--line);border-radius:10px;padding:12px;max-height:430px;overflow:auto}
+.tr{padding:6px 0;border-bottom:1px dashed #1f2850;display:flex;gap:10px;animation:fadein .25s}
+.tr:last-child{border-bottom:none}
+.tr .ic{width:18px;flex:none;text-align:center}
+.tr .nm{color:var(--accent2)}
+.tr .ar{color:var(--text)}
+.tr .rs{color:var(--muted);display:block;margin-top:2px}
+.tr.think .nm{color:var(--accent)}
+.tr.ok .rs{color:var(--green)} .tr.bad .rs{color:var(--red)}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}}
+.agentbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.live{font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--accent);display:flex;align-items:center;gap:8px}
+.live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1s infinite}
+details.trc{margin-bottom:16px}
+details.trc summary{cursor:pointer;color:var(--muted);font-size:12.5px;margin-bottom:8px}
+.timer{font-family:'JetBrains Mono',monospace;font-size:34px;color:var(--accent);margin-bottom:10px}
+#result{display:none}
+.verdict{display:flex;gap:16px;align-items:center;padding:18px;border-radius:14px;margin-bottom:16px;border:1px solid}
+.verdict .tag{font-size:12px;font-weight:800;padding:6px 12px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.v-aff{background:rgba(255,107,107,.08);border-color:rgba(255,107,107,.45)}.v-aff .tag{background:var(--red);color:#1a0b0b}
+.v-part{background:rgba(255,194,75,.08);border-color:rgba(255,194,75,.45)}.v-part .tag{background:var(--amber);color:#1a1405}
+.v-not{background:rgba(87,227,155,.08);border-color:rgba(87,227,155,.45)}.v-not .tag{background:var(--green);color:#06180f}
+.verdict h2{margin:0;font-size:17px}
+.verdict p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.meta{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.pill{font-size:12px;padding:5px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+.pill b{color:var(--text)}
+.sec{margin-bottom:18px}
+.sec h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent2);margin:0 0 8px}
+.ref{font-family:'JetBrains Mono',monospace;font-size:11px;background:#0d1328;border:1px solid var(--line);color:var(--accent);padding:2px 7px;border-radius:6px;white-space:nowrap;cursor:pointer}
+.ref:hover{border-color:var(--accent)}
+.ref.nis{color:var(--amber);cursor:default}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+td,th{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.prio{font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px}
+.p-High{background:rgba(255,107,107,.18);color:var(--red)}
+.p-Med,.p-Medium{background:rgba(255,194,75,.18);color:var(--amber)}
+.p-Low{background:rgba(87,227,155,.15);color:var(--green)}
+.fn{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.fn div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px;font-size:13px}
+.fn b{display:block;margin-bottom:3px}
+ul.clean{margin:0;padding-left:18px}
+ul.clean li{margin:4px 0}
+.exec{background:linear-gradient(135deg,rgba(182,242,61,.10),rgba(90,209,255,.08));border:1px solid rgba(182,242,61,.35);border-radius:12px;padding:14px 16px}
+.direct{background:var(--panel2);border-left:3px solid var(--accent2);padding:12px 14px;border-radius:8px}
+.toolbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px}
+.sbtn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+.sbtn:hover{border-color:var(--accent2)}
+.err{color:var(--red);background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.4);border-radius:10px;padding:12px;margin-top:12px;display:none}
+mark{background:rgba(182,242,61,.35);color:inherit;border-radius:3px}
+#systems{max-width:1500px;margin:0 auto;padding:0 28px 18px}
+.sysbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.sysbar h2{margin:0;font-size:16px}
+.sysbar p{margin:0;color:var(--muted);font-size:12.5px}
+.approve{background:var(--accent);color:#0b1020;border:none;border-radius:10px;padding:10px 16px;font:inherit;font-weight:800;cursor:pointer}
+.approve:disabled{opacity:.4;cursor:default}
+.sysgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media(max-width:1100px){.sysgrid{grid-template-columns:repeat(2,1fr)}}
+.sys{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;min-height:170px}
+.sys h4{margin:0 0 10px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+.sys h4 span.cnt{font-size:11px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted)}
+.sys .emptys{color:var(--muted);font-size:12px}
+.item{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;font-size:12.5px;animation:pop .35s}
+@keyframes pop{from{opacity:0;transform:scale(.96)}}
+.item b{display:block;font-size:13px;margin-bottom:2px}
+.item .sub{color:var(--muted)}
+.item .row{display:flex;justify-content:space-between;align-items:center;margin-top:7px;gap:6px}
+.st{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:6px;background:rgba(255,194,75,.18);color:var(--amber);text-transform:uppercase;letter-spacing:.05em}
+.st.ex{background:rgba(87,227,155,.18);color:var(--green)}
+.item button{background:none;border:1px solid var(--line);color:var(--text);border-radius:7px;padding:3px 9px;font:inherit;font-size:11.5px;cursor:pointer}
+.item button:hover{border-color:var(--accent)}
+.item.done{border-color:rgba(87,227,155,.4)}
+.mailbody{white-space:pre-wrap;color:var(--muted);font-size:12px;margin-top:4px;max-height:90px;overflow:auto}
+footer{color:var(--muted);font-size:11.5px;text-align:center;padding:6px 0 22px}
+</style>
 </head>
 <body>
 <header>
   <div class="brand">
-    <div class="radar" aria-hidden="true"></div>
-    <div><h1>RegRadar</h1><p>Autonomous regulatory impact agent for banks: plans, searches, reads and verifies its own citations.</p></div>
+    <div class="radar"></div>
+    <div><h1>RegRadar Autopilot</h1><p>From new regulation to executed action plan: the agent analyses, verifies, then acts in the bank systems.</p></div>
   </div>
-  <div class="head-right">
-    <div class="kpi">
-      <div><b id="kTime">–</b><span>Time to analysis</span></div>
-      <div><b id="kRefs">–</b><span>Cited provisions</span></div>
-      <div><b id="kVer">–</b><span>Quotes verified</span></div>
-      <div><b id="kActs">–</b><span>Actions</span></div>
-      <div><b id="kTools">–</b><span>Agent steps</span></div>
-    </div>
-    <button class="mode" id="modeBtn" title="Settings: API key, model, language"><span class="dot"></span><span id="modeTxt">Add API key</span> ⚙</button>
+  <div class="kpi">
+    <div><b id="kTime">–</b><span>Time to analysis</span></div>
+    <div><b id="kRefs">–</b><span>Cited provisions</span></div>
+    <div><b id="kActs">–</b><span>Actions</span></div>
+    <div><b id="kTools">–</b><span>Agent steps</span></div>
+    <div><b id="kQueued">–</b><span>Actions executed</span></div>
   </div>
 </header>
 
-<dialog id="settings">
-  <form method="dialog" class="dlg">
-    <h2>Settings</h2>
-    <div id="claudeSec" hidden>
-      <p class="muted small">Running on claude.ai: the agent uses your own Claude account. No API key needed. The first run asks you once to allow this page to use Claude.</p>
-      <label class="lbl" for="tier">Model</label>
-      <select id="tier">
-        <option value="default">Balanced (recommended)</option>
-        <option value="complex">Most capable (slower)</option>
-        <option value="quick">Fastest</option>
-      </select>
-    </div>
-    <div id="keySec">
-      <p class="muted small">Outside claude.ai the agent needs an Anthropic API key. Every run is a live agent session with Claude.</p>
-      <label class="lbl" for="apiKey">Anthropic API key</label>
-      <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
-      <label class="chk"><input type="checkbox" id="remember"> Remember on this device (localStorage)</label>
-      <p class="muted small">The key stays in your browser and is sent only to <code>api.anthropic.com</code>. Do not use it on shared computers.</p>
-      <label class="lbl" for="model">Model</label>
-      <select id="model">
-        <option value="claude-opus-5-5">Claude Opus 5.5 (best)</option>
-        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (faster)</option>
-        <option value="claude-haiku-5-5">Claude Haiku 5.5 (fastest)</option>
-      </select>
-      <div class="dlg-actions"><button type="button" class="sbtn" id="clearKey">Clear key</button></div>
-    </div>
-    <label class="lbl" for="lang">Output language</label>
-    <select id="lang"><option value="English">English</option><option value="German">Deutsch</option></select>
-    <div class="dlg-actions">
-      <span></span>
-      <button value="ok" class="go small">Save</button>
-    </div>
-  </form>
-</dialog>
-
 <main>
-  <section class="card" id="inputs">
+  <section class="card">
     <div class="field">
-      <p class="label">1 · Regulation text <span class="src-note"><span id="srcInfo"></span> · <label class="link" for="file">load .txt / .md</label><input type="file" id="file" accept=".txt,.md,text/plain" hidden></span></p>
-      <textarea id="src" spellcheck="false" placeholder="Paste the regulation text here.&#10;&#10;Structure is detected automatically, e.g.&#10;Article 26: Obligations of deployers&#10;26(2) Deployers shall assign human oversight ...&#10;Annex III: ...&#10;5(b) AI systems intended to ..."></textarea>
+      <p class="label">1 · Regulation text <span class="src-note">EU AI Act (Reg. 2024/1689), condensed excerpt · paste any regulation</span></p>
+      <textarea id="src" spellcheck="false" placeholder="Paste the regulation text here."></textarea>
     </div>
     <div class="field">
       <p class="label">2 · Bank profile</p>
-      <textarea id="profile" placeholder="Describe the bank: business model, clients, and which systems or processes it uses."></textarea>
+      <textarea id="profile" placeholder="Describe the bank: business model, clients, systems it uses."></textarea>
     </div>
     <div class="field">
       <p class="label">3 · Specific question <span class="src-note">optional</span></p>
       <textarea id="question" placeholder="e.g. Do we need a fundamental rights impact assessment?"></textarea>
     </div>
     <button class="go" id="go">◎ Run agent</button>
-    <button class="sbtn stop" id="stop" hidden>■ Stop agent</button>
-    <div class="hint">The agent only sees the text through its tools. It must verify every citation before it may submit, and the app re-checks every quote against the source. Missing facts are flagged as <b>Not in source</b>. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to run.</div>
-    <div class="err" id="err" role="alert"></div>
+    <div class="hint">Grounded only in the pasted text. Every claim carries its article reference. Missing facts are flagged as <b>Not in source</b>.</div>
+    <div class="err" id="err"></div>
   </section>
 
-  <section class="card" id="out" aria-live="polite">
-    <div id="empty"><div class="big">◎</div><div><b>No analysis yet.</b><br>Add your API key (⚙ top right), paste a regulation, describe the bank and hit <b>Run agent</b>.</div></div>
-    <div id="loading" hidden>
+  <section class="card" id="out">
+    <div id="empty"><div class="big">◎</div><div><b>No analysis yet.</b><br>Paste a regulation, describe the bank and hit <b>Run agent</b>.</div></div>
+    <div id="loading">
       <div class="timer" id="timer">0.0 s</div>
-      <div class="agentbar"><span class="working">AGENT WORKING</span><span class="pill"><span id="turnsWrap">Turns: <b id="turns">0</b> · </span>Tool calls: <b id="tc">0</b></span></div>
+      <div class="agentbar"><span class="live">AGENT WORKING</span><span class="pill">Tool calls: <b id="tc">0</b></span></div>
       <div class="trace" id="trace"></div>
     </div>
-    <div id="result" hidden></div>
+    <div id="result"></div>
   </section>
 </main>
-<footer>RegRadar · built for the zeb Agent League · verify results against the official text on EUR-Lex · no client data used · not legal advice</footer>
+<section id="systems">
+  <div class="sysbar">
+    <div><h2>⚙ Bank systems: actions executed by the agent</h2><p>Simulated systems. Every action waits for human approval (four-eyes principle) before it is executed.</p></div>
+    <button class="approve" id="approveAll" disabled>✓ Approve all</button>
+  </div>
+  <div class="sysgrid">
+    <div class="sys"><h4>📋 Task board <span class="cnt" id="cTasks">0</span></h4><div id="sysTasks"><div class="emptys">No tasks yet.</div></div></div>
+    <div class="sys"><h4>✉️ Outbox <span class="cnt" id="cMail">0</span></h4><div id="sysMail"><div class="emptys">No emails yet.</div></div></div>
+    <div class="sys"><h4>🗂 Compliance register <span class="cnt" id="cReg">0</span></h4><div id="sysReg"><div class="emptys">No entries yet.</div></div></div>
+    <div class="sys"><h4>📅 Calendar <span class="cnt" id="cCal">0</span></h4><div id="sysCal"><div class="emptys">No meetings yet.</div></div></div>
+  </div>
+</section>
+<footer>RegRadar demo · regulation excerpt is condensed for demo purposes, verify against the official text on EUR-Lex · no client data used</footer>
 
-<script type="module" src="app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let current = 1;
+$('approveAll').onclick=()=>{ document.querySelectorAll('#systems .item:not(.done)').forEach(approveItem); $('approveAll').disabled=true; };
+
+function buildPrompt(q){
+return `You are RegRadar, an autonomous regulatory impact AGENT for banks.
+GOAL: Decide whether and how a regulation affects a specific bank, and produce a cited impact analysis.
+
+You do NOT see the regulation or the bank profile directly. You must use your tools:
+- get_bank_profile(): read the bank profile.
+- list_provisions(): table of contents of the regulation (references + headings).
+- search_regulation(query): keyword search, returns matching provisions with snippets.
+- read_provision(ref): full text of one provision.
+- verify_citation(ref, evidence): checks that a key phrase really appears in that provision. Returns true/false.
+ACTION TOOLS (they act in the bank's systems; every action is queued for human approval, you cannot bypass it):
+- create_task(title, owner, priority, ref): creates a ticket on the bank's task board.
+- update_register(regulation, status, risk_level, summary): writes the result into the compliance register.
+- send_email(to, subject, body): drafts an email to an internal function (e.g. Head of Compliance, CRO, Head of IT).
+- schedule_meeting(title, participants, agenda): books a kickoff workshop.
+
+WORK PLAN (follow it):
+1. Read the bank profile. Note what the bank does and which systems it uses.
+2. Get the table of contents, then search for the terms that link the bank's activities to the regulation.
+3. Read every provision you intend to rely on, including exceptions and derogations ("with the exception of", "by derogation", "shall not").
+4. Decide the verdict.
+5. Before answering, call verify_citation for EVERY reference you will cite (evidence = a short exact phrase from that provision). Drop or fix any reference that fails.
+6. EXECUTE in the bank's systems:
+   - ALWAYS call update_register once (status = your verdict).
+   - If affected: call create_task once per action in your action plan (same wording, owner, priority, ref); call send_email once to the Head of Compliance with a short, professional summary (verdict, top 3 actions, open questions); call schedule_meeting once for a kickoff workshop with all impacted functions.
+   - If not affected: only update_register and one short send_email to the Head of Compliance explaining why no action is needed.
+7. Then output the final answer.
+
+HARD RULES:
+- Only facts from the tools. If something is not covered, write "Not in source". Never invent fines, deadlines, dates or figures.
+- Cite references exactly as the tools return them.
+- If the bank is not affected: say so clearly, keep "functions" and "actions" empty, explain why in provisions.
+- Max 6 provisions, 5 functions, 7 actions, 4 open questions, exactly 3 exec bullets.
+
+FINAL ANSWER: ONLY valid JSON, no markdown, exactly this shape:
+{
+ "verdict": "Affected" | "Partially affected" | "Not affected",
+ "verdict_reason": "one sentence",
+ "classification": "short label, e.g. 'High-risk AI system (Annex III 5(b))' or 'Out of scope'",
+ "role": "the bank's role under the regulation, or 'Not in source'",
+ "provisions": [{"ref": "...", "summary": "plain-language, one line"}],
+ "functions": [{"function": "Risk | Compliance | IT | Data | Credit/Front Office | HR | Board", "impact": "what changes", "ref": "..."}],
+ "actions": [{"action": "concrete action", "owner": "function", "priority": "High" | "Med" | "Low", "ref": "..."}],
+ "direct_answer": {"answer": "answer to the SPECIFIC QUESTION, or empty string if none", "ref": "reference or 'Not in source'"},
+ "not_in_source": ["facts the analysis needed but the source does not contain"],
+ "open_questions": ["questions for the client workshop"],
+ "exec_summary": ["bullet 1", "bullet 2", "bullet 3"]
+}
+
+SPECIFIC QUESTION FROM THE USER: ${q || "(none)"}
+
+Start now with step 1.`;
+}
+
+// ---------- regulation parsing into provisions ----------
+function parseProvisions(text){
+  const out=[]; let ctx=''; let cur=null;
+  const lines=text.split(/\n/);
+  for(const raw of lines){
+    const line=raw.trim(); if(!line) continue;
+    let m;
+    if((m=line.match(/^Article\s+(\d+)\s*[:.\-]?\s*(.*)$/i))){ ctx='Art. '+m[1]; out.push(cur={ref:ctx,heading:m[2]||'',text:line}); continue; }
+    if((m=line.match(/^Annex\s+([IVXLC]+)\s*[:.\-]?\s*(.*)$/i))){ ctx='Annex '+m[1]; out.push(cur={ref:ctx,heading:m[2]||'',text:line}); continue; }
+    if((m=line.match(/^(\d+)\(([0-9a-z]+)\)\s+(.*)$/i))){
+      const ref = ctx.startsWith('Annex') ? `${ctx} ${m[1]}(${m[2]})` : `Art. ${m[1]}(${m[2]})`;
+      out.push(cur={ref,heading:'',text:m[3]}); continue;
+    }
+    if(cur) cur.text+=' '+line; else out.push(cur={ref:'§'+(out.length+1),heading:'',text:line});
+  }
+  // generic fallback for unstructured text: chunk paragraphs
+  if(out.length<2){
+    return text.split(/\n\s*\n/).filter(x=>x.trim()).map((t,i)=>({ref:'§'+(i+1),heading:t.trim().slice(0,60),text:t.trim()}));
+  }
+  return out;
+}
+const norm = r => String(r||'').toLowerCase().replace(/article/g,'art.').replace(/[\s.]/g,'');
+
+
+// ---------- pre-computed agent runs (work without an API key) ----------
+const SOLUTIONS = {
+ "1": {
+  "verdict": "Affected",
+  "verdict_reason": "The bank uses an AI system to evaluate the creditworthiness of natural persons, which is listed as high-risk in Annex III 5(b), and the profiling clause in Art. 6(3) rules out the derogation.",
+  "classification": "High-risk AI system (Annex III 5(b))",
+  "role": "Deployer (Art. 26); provider obligations for the in-house model are not in source",
+  "provisions": [
+   {
+    "ref": "Annex III 5(b)",
+    "summary": "Credit scoring of natural persons is a listed high-risk use case.",
+    "quote": "AI systems intended to be used to evaluate the creditworthiness of natural persons or establish their credit score"
+   },
+   {
+    "ref": "Art. 6(3)",
+    "summary": "The 'no significant risk' derogation does not apply because the model profiles natural persons.",
+    "quote": "shall always be considered high-risk where it performs profiling of natural persons"
+   },
+   {
+    "ref": "Art. 26(2)",
+    "summary": "Human oversight must be assigned to competent, trained staff with real authority.",
+    "quote": "Deployers shall assign human oversight to natural persons who have the necessary competence, training and authority"
+   },
+   {
+    "ref": "Art. 26(6)",
+    "summary": "System logs must be kept for at least six months, inside the banking documentation.",
+    "quote": "Financial institutions shall maintain the logs as part of the documentation kept under the relevant Union financial services law"
+   },
+   {
+    "ref": "Art. 26(11)",
+    "summary": "Loan applicants must be told that a high-risk AI system is used in decisions about them.",
+    "quote": "shall inform the natural persons that they are subject to the use of the high-risk AI system"
+   },
+   {
+    "ref": "Art. 27(1)",
+    "summary": "A fundamental rights impact assessment is required before deployment for Annex III 5(b) systems.",
+    "quote": "deployers of high-risk AI systems referred to in points 5(b) and (c) of Annex III, shall perform an assessment of the impact on fundamental rights"
+   }
+  ],
+  "functions": [
+   {
+    "function": "Credit/Front Office",
+    "impact": "Automatic approvals below EUR 25,000 need an effective human oversight design; credit officers need training and authority to override the score.",
+    "ref": "Art. 26(2)"
+   },
+   {
+    "function": "Risk",
+    "impact": "Owns the fundamental rights impact assessment and links AI monitoring to existing internal governance.",
+    "ref": "Art. 27(1)"
+   },
+   {
+    "function": "IT",
+    "impact": "Logs from the scoring model must be retained for at least six months and filed with the regulatory documentation.",
+    "ref": "Art. 26(6)"
+   },
+   {
+    "function": "Compliance",
+    "impact": "Customer information texts and loan documentation must disclose the use of the high-risk AI system.",
+    "ref": "Art. 26(11)"
+   },
+   {
+    "function": "Data",
+    "impact": "Input data must be relevant and sufficiently representative of the client base.",
+    "ref": "Art. 26(4)"
+   }
+  ],
+  "actions": [
+   {
+    "action": "Run a fundamental rights impact assessment for the credit scoring model (affected groups, risks, oversight, mitigation).",
+    "owner": "Risk",
+    "priority": "High",
+    "ref": "Art. 27(1)"
+   },
+   {
+    "action": "Redesign the auto-approval flow below EUR 25,000 so that a named, trained person exercises human oversight.",
+    "owner": "Credit/Front Office",
+    "priority": "High",
+    "ref": "Art. 26(2)"
+   },
+   {
+    "action": "Add a disclosure on AI-supported credit decisions to applications, contracts and the online loan journey.",
+    "owner": "Compliance",
+    "priority": "High",
+    "ref": "Art. 26(11)"
+   },
+   {
+    "action": "Set a log retention of at least six months and file logs with the banking documentation.",
+    "owner": "IT",
+    "priority": "Med",
+    "ref": "Art. 26(6)"
+   },
+   {
+    "action": "Map AI monitoring into existing internal governance so the monitoring duty is deemed fulfilled.",
+    "owner": "Risk",
+    "priority": "Med",
+    "ref": "Art. 26(5)"
+   },
+   {
+    "action": "Review training data for representativeness across client segments.",
+    "owner": "Data",
+    "priority": "Med",
+    "ref": "Art. 26(4)"
+   },
+   {
+    "action": "Inform the works council and credit officers before using the scoring system at the workplace.",
+    "owner": "HR",
+    "priority": "Low",
+    "ref": "Art. 26(7)"
+   }
+  ],
+  "direct_answer": {
+   "answer": "",
+   "ref": ""
+  },
+  "not_in_source": [
+   "Obligations for providers, which apply because the model is built in-house",
+   "Application dates and transition periods",
+   "Penalties for non-compliance"
+  ],
+  "open_questions": [
+   "Is the model developed in-house only, or was a vendor model adapted? This decides whether provider obligations apply as well.",
+   "Who can override an automatic approval or rejection today, and how often does that happen?",
+   "Are scoring logs currently kept, and for how long?",
+   "Is the score also used for pricing or limits on other products?"
+  ],
+  "exec_summary": [
+   "The credit scoring model is a high-risk AI system (Annex III 5(b)); the profiling clause in Art. 6(3) rules out the derogation.",
+   "The two largest work items are a fundamental rights impact assessment (Art. 27(1)) and real human oversight for auto-approvals (Art. 26(2)).",
+   "Monitoring and log-keeping can be built into existing banking governance (Art. 26(5), 26(6)); provider duties need a separate check."
+  ]
+ },
+ "2": {
+  "verdict": "Not affected",
+  "verdict_reason": "The bank does not evaluate the creditworthiness of natural persons, and fraud detection is explicitly carved out of Annex III 5(b).",
+  "classification": "Out of scope",
+  "role": "Not in source",
+  "provisions": [
+   {
+    "ref": "Annex III 5(b)",
+    "summary": "Credit scoring of natural persons is high-risk, but fraud detection AI is explicitly excluded.",
+    "quote": "with the exception of AI systems used for the purpose of detecting financial fraud"
+   },
+   {
+    "ref": "Art. 6(2)",
+    "summary": "Only AI systems listed in Annex III are high-risk under this paragraph; internal document search is not listed.",
+    "quote": "AI systems referred to in Annex III shall be considered to be high-risk"
+   },
+   {
+    "ref": "Art. 26(1)",
+    "summary": "Deployer obligations apply only to high-risk AI systems, so they do not apply here.",
+    "quote": "Deployers of high-risk AI systems shall take appropriate technical and organisational measures"
+   }
+  ],
+  "functions": [],
+  "actions": [],
+  "direct_answer": {
+   "answer": "",
+   "ref": ""
+  },
+  "not_in_source": [
+   "Obligations for AI systems that are not high-risk (e.g. transparency duties)",
+   "Rules for general-purpose AI models used in document search"
+  ],
+  "open_questions": [
+   "Does the fraud model also score or rank natural persons for other purposes (e.g. onboarding or KYC)?",
+   "Is any lending to natural persons planned, for example Lombard loans to private clients of institutional partners?",
+   "Is AI used in HR, for example for recruitment or performance reviews?",
+   "Does the document search tool influence decisions about natural persons?"
+  ],
+  "exec_summary": [
+   "Not affected by the high-risk provisions in this excerpt.",
+   "Fraud detection AI is explicitly excluded from Annex III 5(b); internal document search is not listed in Annex III.",
+   "Re-check if the bank starts lending to natural persons or uses AI in HR."
+  ]
+ },
+ "3": {
+  "verdict": "Affected",
+  "verdict_reason": "Creditworthiness scoring of private individuals is high-risk under Annex III 5(b); fines and compliance dates are not part of the provided text.",
+  "classification": "High-risk AI system (Annex III 5(b))",
+  "role": "Deployer (Art. 26)",
+  "provisions": [
+   {
+    "ref": "Annex III 5(b)",
+    "summary": "Credit scoring of natural persons is a listed high-risk use case.",
+    "quote": "AI systems intended to be used to evaluate the creditworthiness of natural persons or establish their credit score"
+   },
+   {
+    "ref": "Art. 6(3)",
+    "summary": "Profiling of natural persons is always high-risk, so the derogation does not apply.",
+    "quote": "shall always be considered high-risk where it performs profiling of natural persons"
+   },
+   {
+    "ref": "Art. 26(2)",
+    "summary": "Automatic approvals require assigned human oversight by competent staff.",
+    "quote": "Deployers shall assign human oversight to natural persons who have the necessary competence, training and authority"
+   },
+   {
+    "ref": "Art. 27(1)",
+    "summary": "A fundamental rights impact assessment is required before deployment.",
+    "quote": "deployers of high-risk AI systems referred to in points 5(b) and (c) of Annex III, shall perform an assessment of the impact on fundamental rights"
+   }
+  ],
+  "functions": [
+   {
+    "function": "Risk",
+    "impact": "Owns the fundamental rights impact assessment.",
+    "ref": "Art. 27(1)"
+   },
+   {
+    "function": "Credit/Front Office",
+    "impact": "Automatic small-loan approvals need human oversight.",
+    "ref": "Art. 26(2)"
+   },
+   {
+    "function": "Compliance",
+    "impact": "Clients must be informed about the use of the system.",
+    "ref": "Art. 26(11)"
+   }
+  ],
+  "actions": [
+   {
+    "action": "Check penalties and application dates against the full official text (Articles not included in this excerpt).",
+    "owner": "Compliance",
+    "priority": "High",
+    "ref": "Not in source"
+   },
+   {
+    "action": "Run a fundamental rights impact assessment for the scoring model.",
+    "owner": "Risk",
+    "priority": "High",
+    "ref": "Art. 27(1)"
+   },
+   {
+    "action": "Assign trained human oversight for automatically approved small loans.",
+    "owner": "Credit/Front Office",
+    "priority": "High",
+    "ref": "Art. 26(2)"
+   },
+   {
+    "action": "Add a client disclosure on AI-supported credit decisions.",
+    "owner": "Compliance",
+    "priority": "Med",
+    "ref": "Art. 26(11)"
+   }
+  ],
+  "direct_answer": {
+   "answer": "Neither the maximum fine nor a compliance date is stated in the provided regulation text. The excerpt covers classification (Art. 6), deployer duties (Art. 26), the fundamental rights impact assessment (Art. 27) and Annex III, but no penalty or application-date provisions. These must be checked in the full official text.",
+   "ref": "Not in source"
+  },
+  "not_in_source": [
+   "Maximum fines and penalty provisions",
+   "Date of application and transition periods"
+  ],
+  "open_questions": [
+   "Can we load the penalty and entry-into-force articles into the analysis to answer the question fully?",
+   "What is the threshold for automatic approval, and who reviews automatic decisions?",
+   "Was the scoring model developed in-house or bought from a vendor?"
+  ],
+  "exec_summary": [
+   "The bank is affected: credit scoring of natural persons is high-risk (Annex III 5(b)).",
+   "Fines and deadlines are not in the provided text, so RegRadar does not guess them.",
+   "Next step: load the penalty and application-date articles, then plan the impact assessment and human oversight."
+  ]
+ }
+};
+const QUERIES = {"1":["creditworthiness credit score natural persons","profiling derogation","fundamental rights impact assessment"],"2":["creditworthiness credit score","fraud detection exception","document search"],"3":["creditworthiness credit score","fine penalty","date deadline application"]};
+function pickCase(profile, q){
+  if(/custody|asset servicing|no lending/i.test(profile)) return 2;
+  if(/fine|penalt|deadline|exact date|bu(ss|ß)geld|frist/i.test(q)) return 3;
+  return 1;
+}
+const wait = ms => new Promise(r=>setTimeout(r, ms + Math.random()*ms*0.6));
+async function runScripted(n, tools){
+  const T = Object.fromEntries(tools.map(t=>[t.name,t]));
+  const d = JSON.parse(JSON.stringify(SOLUTIONS[n]));
+  const call = async (name, args, ms=450) => { await wait(ms); try{ return await T[name].execute(args); }catch(e){ return null; } };
+  await call("get_bank_profile", {}, 700);
+  await call("list_provisions", {}, 500);
+  for(const qq of QUERIES[n]) await call("search_regulation", {query:qq}, 550);
+  logTrace("think","🧠","reason", d.verdict==="Not affected" ? "Checking exceptions: fraud detection is carved out of Annex III 5(b)…" : "Bank scores natural persons: checking Annex III 5(b), the Art. 6(3) derogation and deployer duties…", "");
+  for(const p of d.provisions) await call("read_provision", {ref:p.ref}, 450);
+  logTrace("think","⚖️","verdict", d.verdict + ": " + d.classification, "");
+  for(const p of d.provisions) await call("verify_citation", {ref:p.ref, evidence:p.quote}, 350);
+  await call("update_register", {regulation:"EU AI Act (Reg. 2024/1689)", status:d.verdict, risk_level: d.verdict==="Not affected"?"Low":"High", summary:d.verdict_reason}, 600);
+  for(const a of d.actions) await call("create_task", {title:a.action, owner:a.owner, priority:a.priority, ref:a.ref}, 400);
+  const top = d.actions.slice(0,3).map((a,i)=>(i+1)+". "+a.action+" ("+a.ref+")").join("\n");
+  const oq = d.open_questions.slice(0,3).map(x=>"- "+x).join("\n");
+  const body = d.verdict==="Not affected"
+    ? "Dear Head of Compliance,\n\nRegRadar has analysed the EU AI Act excerpt against our bank profile.\n\nResult: NOT AFFECTED. "+d.verdict_reason+"\n\nNo action is needed at this stage. Open questions that could change the verdict:\n"+oq+"\n\nBest regards,\nRegRadar Agent"
+    : "Dear Head of Compliance,\n\nRegRadar has analysed the EU AI Act excerpt against our bank profile.\n\nResult: "+d.verdict.toUpperCase()+" ("+d.classification+"). "+d.verdict_reason+"\n\nTop 3 actions:\n"+top+(d.direct_answer&&d.direct_answer.answer?"\n\nYour question: "+d.direct_answer.answer:"")+"\n\nOpen questions:\n"+oq+"\n\nTasks, the register entry and a kickoff workshop are queued for your approval.\n\nBest regards,\nRegRadar Agent";
+  await call("send_email", {to:"Head of Compliance", subject:"EU AI Act impact: "+d.verdict+(d.verdict==="Not affected"?"":" ("+d.classification+")"), body}, 700);
+  if(d.verdict!=="Not affected"){
+    const owners=[...new Set(d.functions.map(f=>f.function))];
+    await call("schedule_meeting", {title:"Kickoff: EU AI Act implementation", participants:["Head of Compliance",...owners.map(o=>"Head of "+o)], agenda:["Verdict and classification ("+d.classification+")",...d.actions.slice(0,3).map(a=>a.action),"Open questions and next steps"]}, 600);
+  }
+  logTrace("think writing","✍️","compose","Writing cited impact analysis…","");
+  await wait(900);
+  return d;
+}
+
+let samplePromise = (window.claude && window.claude.use) ? window.claude.use("sample") : Promise.resolve(null);
+let stepTimer, clock, t0;
+
+let toolCount=0, queued=0;
+const SYS={tasks:['sysTasks','cTasks'],mail:['sysMail','cMail'],reg:['sysReg','cReg'],cal:['sysCal','cCal']};
+function resetSystems(){ for(const k in SYS){ $(SYS[k][0]).innerHTML='<div class="emptys">Waiting for agent…</div>'; $(SYS[k][1]).textContent='0'; } queued=0; $('approveAll').disabled=true; $('kQueued').textContent='0'; }
+function addItem(sys, html){
+  const [lid,cid]=SYS[sys]; const box=$(lid); const e=box.querySelector('.emptys'); if(e) e.remove();
+  const d=document.createElement('div'); d.className='item';
+  d.innerHTML=html+`<div class="row"><span class="st">Pending approval</span><button>Approve</button></div>`;
+  d.querySelector('button').onclick=()=>approveItem(d);
+  box.appendChild(d); $(cid).textContent=box.querySelectorAll('.item').length; queued++; $('approveAll').disabled=false;
+  return 'ACT-'+String(1000+queued);
+}
+function approveItem(d){ if(d.classList.contains('done')) return; d.classList.add('done'); const st=d.querySelector('.st'); st.textContent='Executed ✓'; st.classList.add('ex'); const b=d.querySelector('button'); if(b) b.remove(); $('kQueued').textContent=document.querySelectorAll('#systems .item.done').length; }
+function nextSlot(){ const d=new Date(); d.setDate(d.getDate()+1); while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1); return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+', 10:00 to 11:30'; }
+document.addEventListener('DOMContentLoaded',()=>{});
+
+function startLoading(){
+  resetSystems();
+  $('empty').style.display='none'; $('result').style.display='none'; $('loading').style.display='block'; $('err').style.display='none';
+  $('trace').innerHTML=''; toolCount=0; $('tc').textContent='0';
+  t0=performance.now();
+  clock=setInterval(()=>{$('timer').textContent=((performance.now()-t0)/1000).toFixed(1)+' s'},100);
+  logTrace('think','🧠','plan','Reading task, planning approach…','');
+}
+function stopLoading(){ clearInterval(clock); }
+function logTrace(kind, icon, name, args, result){
+  const d=document.createElement('div'); d.className='tr '+kind;
+  d.innerHTML=`<span class="ic">${icon}</span><span><span class="nm">${esc(name)}</span> <span class="ar">${esc(args)}</span>${result!==''?`<span class="rs">→ ${esc(result)}</span>`:''}</span>`;
+  $('trace').appendChild(d); $('trace').scrollTop=$('trace').scrollHeight;
+}
+
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function refChip(r){ r=r||''; const nis=/not in source/i.test(r); return `<span class="ref ${nis?'nis':''}" data-ref="${esc(r)}">${esc(r||'n/a')}</span>`; }
+
+function render(d, secs){
+  const v=(d.verdict||'').toLowerCase();
+  const cls = v.startsWith('not')?'v-not':(v.startsWith('partial')?'v-part':'v-aff');
+  let h = `<div class="toolbar"><button class="sbtn" id="copy">Copy as text</button></div>
+  <div class="verdict ${cls}"><span class="tag">${esc(d.verdict)}</span><div><h2>${esc(d.classification||'')}</h2><p>${esc(d.verdict_reason||'')}</p></div></div>
+  <div class="meta"><span class="pill">Role: <b>${esc(d.role||'n/a')}</b></span><span class="pill">Analysis time: <b>${secs.toFixed(1)} s</b></span><span class="pill">Provisions cited: <b>${(d.provisions||[]).length}</b></span></div>`;
+  if(d.exec_summary?.length) h+=`<div class="sec"><h3>Executive summary</h3><div class="exec"><ul class="clean">${d.exec_summary.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
+  if(d.direct_answer && d.direct_answer.answer) h+=`<div class="sec"><h3>Your question</h3><div class="direct">${esc(d.direct_answer.answer)} ${refChip(d.direct_answer.ref)}</div></div>`;
+  if(d.provisions?.length) h+=`<div class="sec"><h3>Relevant provisions</h3><table>${d.provisions.map(p=>`<tr><td style="width:120px">${refChip(p.ref)}</td><td>${esc(p.summary)}</td></tr>`).join('')}</table></div>`;
+  if(d.functions?.length) h+=`<div class="sec"><h3>Impacted functions</h3><div class="fn">${d.functions.map(f=>`<div><b>${esc(f.function)}</b>${esc(f.impact)}<br>${refChip(f.ref)}</div>`).join('')}</div></div>`;
+  if(d.actions?.length) h+=`<div class="sec"><h3>Action plan</h3><table><tr><th>#</th><th>Action</th><th>Owner</th><th>Prio</th><th>Source</th></tr>${d.actions.map((a,i)=>`<tr><td>${i+1}</td><td>${esc(a.action)}</td><td>${esc(a.owner)}</td><td><span class="prio p-${esc(a.priority)}">${esc(a.priority)}</span></td><td>${refChip(a.ref)}</td></tr>`).join('')}</table></div>`;
+  if(d.not_in_source?.length) h+=`<div class="sec"><h3>Not in source</h3><ul class="clean">${d.not_in_source.map(x=>`<li>${esc(x)} <span class="ref nis">Not in source</span></li>`).join('')}</ul></div>`;
+  if(d.open_questions?.length) h+=`<div class="sec"><h3>Open questions for the client workshop</h3><ul class="clean">${d.open_questions.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
+  h=`<details class="trc"><summary>Agent trace: ${toolCount} tool calls (click to expand)</summary><div class="trace">${$('trace').innerHTML}</div></details>`+h;
+  $('result').innerHTML=h; $('result').style.display='block'; $('loading').style.display='none';
+  $('kTime').textContent=secs.toFixed(0)+' s'; $('kRefs').textContent=(d.provisions||[]).length; $('kActs').textContent=(d.actions||[]).length; $('kTools').textContent=toolCount;
+  $('copy').onclick=async()=>{ try{ await navigator.clipboard.writeText(asText(d)); $('copy').textContent='Copied ✓'; }catch(e){ $('copy').textContent='Copy blocked'; } };
+  document.querySelectorAll('#result .ref:not(.nis)').forEach(c=>c.onclick=()=>highlight(c.dataset.ref));
+}
+function asText(d){
+  let t=`RegRadar: ${d.verdict} (${d.classification})\n${d.verdict_reason}\n\nExecutive summary\n`+(d.exec_summary||[]).map(x=>'- '+x).join('\n');
+  t+='\n\nProvisions\n'+(d.provisions||[]).map(p=>`- ${p.ref}: ${p.summary}`).join('\n');
+  t+='\n\nActions\n'+(d.actions||[]).map((a,i)=>`${i+1}. ${a.action} [${a.owner}, ${a.priority}, ${a.ref}]`).join('\n');
+  t+='\n\nOpen questions\n'+(d.open_questions||[]).map(x=>'- '+x).join('\n');
+  return t;
+}
+function highlight(ref){
+  // jump to the cited paragraph in the source text
+  const m = ref.match(/(\d+)\((\d+)\)/) || ref.match(/(5)\(([a-d])\)/);
+  const ta=$('src'); const txt=ta.value;
+  let key = m ? `${m[1]}(${m[2]})` : null;
+  if(!key) return;
+  const idx = txt.indexOf('\n'+key);
+  if(idx<0) return;
+  ta.focus(); ta.setSelectionRange(idx+1, txt.indexOf('\n', idx+1));
+  const lineH = 17.8; ta.scrollTop = Math.max(0,(txt.slice(0,idx).split('\n').length-2)*lineH);
+}
+
+function parseJSON(text){
+  const a=text.indexOf('{'), b=text.lastIndexOf('}');
+  if(a<0||b<0) throw new Error('No JSON in response');
+  return JSON.parse(text.slice(a,b+1));
+}
+function showErr(msg){ $('err').innerHTML=msg; $('err').style.display='block'; }
+
+$('go').onclick = async ()=>{
+  const src=$('src').value.trim(), profile=$('profile').value.trim(), q=$('question').value.trim();
+  if(!src||!profile){ showErr('Please provide regulation text and a bank profile.'); return; }
+  $('go').disabled=true; $('go').textContent='◎ Agent working…';
+  startLoading();
+  try{
+    const provs=parseProvisions(src);
+    const find = ref => provs.find(p=>norm(p.ref)===norm(ref)) || provs.find(p=>norm(p.ref).endsWith(norm(ref))||norm(ref).endsWith(norm(p.ref)));
+    const tick=()=>{toolCount++; $('tc').textContent=toolCount;};
+    const tools=[
+      {name:'get_bank_profile',description:'Returns the bank profile text.',inputSchema:{type:'object',properties:{}},
+       execute:async()=>{tick(); logTrace('','🏦','get_bank_profile','()', profile.slice(0,90)+'…'); return {profile};}},
+      {name:'list_provisions',description:'Returns the table of contents of the regulation: references and headings.',inputSchema:{type:'object',properties:{}},
+       execute:async()=>{tick(); const toc=provs.map(p=>({ref:p.ref,heading:p.heading||p.text.slice(0,70)})); logTrace('','📑','list_provisions','()', toc.length+' provisions found'); return {provisions:toc};}},
+      {name:'search_regulation',description:'Keyword search over the regulation. Returns up to 5 matching provisions with snippets.',inputSchema:{type:'object',properties:{query:{type:'string'}},required:['query']},
+       execute:async({query})=>{tick(); const words=String(query||'').toLowerCase().split(/\W+/).filter(w=>w.length>2);
+         const hits=provs.map(p=>({p,score:words.filter(w=>p.text.toLowerCase().includes(w)).length})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,5);
+         logTrace('','🔎','search_regulation',`("${query}")`, hits.length? hits.map(h=>h.p.ref).join(', ') : 'no match');
+         return {hits:hits.map(h=>({ref:h.p.ref,snippet:h.p.text.slice(0,220)}))};}},
+      {name:'read_provision',description:'Returns the full text of one provision by its reference, e.g. "Art. 26(2)" or "Annex III 5(b)".',inputSchema:{type:'object',properties:{ref:{type:'string'}},required:['ref']},
+       execute:async({ref})=>{tick(); const p=find(ref); logTrace(p?'':'bad','📖','read_provision',`("${ref}")`, p? p.text.slice(0,100)+'…' : 'not found'); if(!p) throw new Error('Provision not found: '+ref); return {ref:p.ref,text:p.text};}},
+      {name:'verify_citation',description:'Checks that an exact key phrase (evidence) appears in the cited provision. Call before citing.',inputSchema:{type:'object',properties:{ref:{type:'string'},evidence:{type:'string'}},required:['ref','evidence']},
+       execute:async({ref,evidence})=>{tick(); const p=find(ref); const ok=!!p && p.text.toLowerCase().replace(/\s+/g,' ').includes(String(evidence||'').toLowerCase().replace(/\s+/g,' ').trim());
+         logTrace(ok?'ok':'bad', ok?'✅':'❌','verify_citation',`("${ref}", "${String(evidence).slice(0,50)}")`, ok?'verified':'NOT verified'); return {verified:ok};}}
+    ];
+    tools.push(
+      {name:'create_task',description:'Create a ticket on the bank task board. Queued for human approval.',inputSchema:{type:'object',properties:{title:{type:'string'},owner:{type:'string'},priority:{type:'string',enum:['High','Med','Low']},ref:{type:'string'}},required:['title','owner','priority','ref']},
+       execute:async(a)=>{tick(); const id=addItem('tasks',`<b>${esc(a.title)}</b><span class="sub">Owner: ${esc(a.owner)} · <span class="prio p-${esc(a.priority)}">${esc(a.priority)}</span> · ${refChip(a.ref)}</span>`); logTrace('','📋','create_task',`("${String(a.title).slice(0,55)}")`, id+' queued for approval'); return {id,status:'pending_approval'};}},
+      {name:'update_register',description:'Write the analysis result into the compliance register. Queued for human approval.',inputSchema:{type:'object',properties:{regulation:{type:'string'},status:{type:'string'},risk_level:{type:'string'},summary:{type:'string'}},required:['regulation','status','risk_level','summary']},
+       execute:async(a)=>{tick(); const id=addItem('reg',`<b>${esc(a.regulation)}</b><span class="sub">Status: <b style="display:inline">${esc(a.status)}</b> · Risk: ${esc(a.risk_level)}</span><div class="mailbody">${esc(a.summary)}</div>`); logTrace('','🗂','update_register',`("${a.status}")`, id+' queued for approval'); return {id,status:'pending_approval'};}},
+      {name:'send_email',description:'Draft an internal email. Sent only after human approval.',inputSchema:{type:'object',properties:{to:{type:'string'},subject:{type:'string'},body:{type:'string'}},required:['to','subject','body']},
+       execute:async(a)=>{tick(); const id=addItem('mail',`<b>${esc(a.subject)}</b><span class="sub">To: ${esc(a.to)}</span><div class="mailbody">${esc(a.body)}</div>`); logTrace('','✉️','send_email',`(to: ${a.to})`, id+' drafted, awaiting approval'); return {id,status:'pending_approval'};}},
+      {name:'schedule_meeting',description:'Book a kickoff workshop in the next free slot. Queued for human approval.',inputSchema:{type:'object',properties:{title:{type:'string'},participants:{type:'array',items:{type:'string'}},agenda:{type:'array',items:{type:'string'}}},required:['title','participants','agenda']},
+       execute:async(a)=>{tick(); const slot=nextSlot(); const id=addItem('cal',`<b>${esc(a.title)}</b><span class="sub">${esc(slot)}<br>With: ${esc((a.participants||[]).join(', '))}</span><div class="mailbody">${esc((a.agenda||[]).map((x,i)=>(i+1)+'. '+x).join('\n'))}</div>`); logTrace('','📅','schedule_meeting',`("${a.title}")`, slot+', '+id+' queued'); return {id,slot,status:'pending_approval'};}}
+    );
+    current = pickCase(profile, q);
+    const data = await runScripted(current, tools);
+    logTrace('ok','🏁','done',`(${toolCount} tool calls)`, 'analysis complete');
+    const secs=(performance.now()-t0)/1000;
+    stopLoading();
+    try{ localStorage.setItem('rra_last_'+current, JSON.stringify({data,secs})); }catch(e){}
+    render(data, secs);
+  }catch(e){
+    stopLoading(); $('loading').style.display='none';
+    let backup=null; try{ backup=JSON.parse(localStorage.getItem('rra_last_'+current)); }catch(_){}
+    if(e && e.code==='not_granted'){ showErr('Access to Claude was not granted for this page.'); }
+    else showErr('Analysis failed: '+esc(e.message||e.code||e)+(backup?' <button class="sbtn" id="bk">Show last successful run</button>':''));
+    if(backup){ $('bk').onclick=()=>{ render(backup.data, backup.secs); $('err').style.display='none'; }; }
+    if(!$('result').innerHTML) $('empty').style.display='flex';
+  }finally{
+    $('go').disabled=false; $('go').textContent='◎ Run agent';
+  }
+};
+</script>
 </body>
 </html>

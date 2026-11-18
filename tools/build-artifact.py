@@ -7,7 +7,7 @@ dist/regradar-artifact.html (the claude.ai publish skeleton adds <html>/<head>).
 import pathlib, re
 
 root = pathlib.Path(__file__).resolve().parent.parent
-html = (root / "index.html").read_text()
+html = (root / "agent.html").read_text()
 css = (root / "styles.css").read_text()
 js = (root / "app.js").read_text()
 
