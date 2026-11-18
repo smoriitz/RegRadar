@@ -132,6 +132,28 @@ mark{background:rgba(182,242,61,.35);color:inherit;border-radius:3px}
 .item button:hover{border-color:var(--accent)}
 .item.done{border-color:rgba(87,227,155,.4)}
 .mailbody{white-space:pre-wrap;color:var(--muted);font-size:12px;margin-top:4px;max-height:90px;overflow:auto}
+#feed{max-width:1500px;margin:18px auto 0;padding:0 28px}
+.feedbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.feedbox .src{font-size:13px;color:var(--muted)}
+.feedbox .src b{color:var(--text)}
+.watch{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--muted)}
+.watch .dot{width:9px;height:9px;border-radius:50%;background:#4a5378}
+.watch.on{color:var(--accent)} .watch.on .dot{background:var(--accent);animation:pulse 1s infinite}
+.monbtn{margin-left:auto;background:var(--accent2);color:#06121c;border:none;border-radius:10px;padding:10px 16px;font:inherit;font-weight:800;cursor:pointer}
+.monbtn.stop{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+#feedItems{width:100%}
+.fitem{display:flex;gap:12px;align-items:center;background:var(--panel2);border:1px solid var(--accent);border-radius:10px;padding:10px 12px;margin-top:4px;animation:pop .4s}
+.fitem .new{background:var(--accent);color:#0b1020;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:6px}
+.fitem .t{font-weight:700}
+.fitem .m{color:var(--muted);font-size:12px}
+.toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0b1020;font-weight:800;padding:12px 20px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:99;animation:pop .3s}
+.demo-tag{font-size:10.5px;color:var(--muted);border:1px dashed var(--line);border-radius:6px;padding:2px 7px}
+.auto{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;cursor:pointer;user-select:none}
+.auto input{display:none}
+.sw{width:38px;height:21px;border-radius:999px;background:#2a3358;position:relative;transition:.2s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:#cfd6ee;transition:.2s}
+.auto input:checked + .sw{background:var(--accent)}
+.auto input:checked + .sw::after{left:20px;background:#0b1020}
 footer{color:var(--muted);font-size:11.5px;text-align:center;padding:6px 0 22px}
 </style>
 </head>
@@ -150,15 +172,29 @@ footer{color:var(--muted);font-size:11.5px;text-align:center;padding:6px 0 22px}
   </div>
 </header>
 
+<section id="feed"><div class="feedbox">
+  <div class="watch" id="watch"><span class="dot"></span><span id="watchTxt">MONITORING OFF</span></div>
+  <div class="src">Watching <b>EUR-Lex · EBA · BaFin · FINMA</b> · Bank on file: <b id="onfile">Sparkasse Musterstadt</b></div>
+  <span class="demo-tag">demo feed: replays a publication</span>
+  <button class="monbtn" id="monBtn">📡 Start monitoring</button>
+  <div id="feedItems"></div>
+</div></section>
 <main>
   <section class="card">
+    <p class="label">Test cases</p>
+    <div class="tests">
+      <button class="tbtn on" data-t="1"><b>1 · Sparkasse Musterstadt</b>ML credit scoring</button>
+      <button class="tbtn" data-t="2"><b>2 · Custody bank</b>No lending, fraud AI only</button>
+      <button class="tbtn" data-t="3"><b>3 · Edge case</b>Fines &amp; deadline?</button>
+    </div>
+
     <div class="field">
       <p class="label">1 · Regulation text <span class="src-note">EU AI Act (Reg. 2024/1689), condensed excerpt · paste any regulation</span></p>
-      <textarea id="src" spellcheck="false" placeholder="Paste the regulation text here."></textarea>
+      <textarea id="src"></textarea>
     </div>
     <div class="field">
       <p class="label">2 · Bank profile</p>
-      <textarea id="profile" placeholder="Describe the bank: business model, clients, systems it uses."></textarea>
+      <textarea id="profile"></textarea>
     </div>
     <div class="field">
       <p class="label">3 · Specific question <span class="src-note">optional</span></p>
@@ -170,7 +206,7 @@ footer{color:var(--muted);font-size:11.5px;text-align:center;padding:6px 0 22px}
   </section>
 
   <section class="card" id="out">
-    <div id="empty"><div class="big">◎</div><div><b>No analysis yet.</b><br>Paste a regulation, describe the bank and hit <b>Run agent</b>.</div></div>
+    <div id="empty"><div class="big">◎</div><div><b>No analysis yet.</b><br>Pick a test case and hit <b>Run agent</b>.</div></div>
     <div id="loading">
       <div class="timer" id="timer">0.0 s</div>
       <div class="agentbar"><span class="live">AGENT WORKING</span><span class="pill">Tool calls: <b id="tc">0</b></span></div>
@@ -182,7 +218,7 @@ footer{color:var(--muted);font-size:11.5px;text-align:center;padding:6px 0 22px}
 <section id="systems">
   <div class="sysbar">
     <div><h2>⚙ Bank systems: actions executed by the agent</h2><p>Simulated systems. Every action waits for human approval (four-eyes principle) before it is executed.</p></div>
-    <button class="approve" id="approveAll" disabled>✓ Approve all</button>
+    <div style="display:flex;gap:14px;align-items:center"><label class="auto"><input type="checkbox" id="autoMode" checked><span class="sw"></span><span id="autoLbl">Full autopilot: executes automatically</span></label><button class="approve" id="approveAll" disabled>✓ Approve all</button></div>
   </div>
   <div class="sysgrid">
     <div class="sys"><h4>📋 Task board <span class="cnt" id="cTasks">0</span></h4><div id="sysTasks"><div class="emptys">No tasks yet.</div></div></div>
@@ -194,8 +230,65 @@ footer{color:var(--muted);font-size:11.5px;text-align:center;padding:6px 0 22px}
 <footer>RegRadar demo · regulation excerpt is condensed for demo purposes, verify against the official text on EUR-Lex · no client data used</footer>
 
 <script>
+const AI_ACT = `REGULATION (EU) 2024/1689 (Artificial Intelligence Act), condensed excerpt
+
+Article 6: Classification rules for high-risk AI systems
+6(1) An AI system shall be considered high-risk where it is intended to be used as a safety component of a product, or is itself a product, covered by the Union harmonisation legislation listed in Annex I and required to undergo a third-party conformity assessment.
+6(2) In addition to the high-risk AI systems referred to in paragraph 1, AI systems referred to in Annex III shall be considered to be high-risk.
+6(3) By derogation from paragraph 2, an AI system referred to in Annex III shall not be considered high-risk where it does not pose a significant risk of harm to the health, safety or fundamental rights of natural persons, including by not materially influencing the outcome of decision making. This applies where the AI system is intended to (a) perform a narrow procedural task; (b) improve the result of a previously completed human activity; (c) detect decision-making patterns or deviations without replacing or influencing the previously completed human assessment without proper human review; or (d) perform a preparatory task to an assessment. Notwithstanding the above, an AI system referred to in Annex III shall always be considered high-risk where it performs profiling of natural persons.
+
+Article 26: Obligations of deployers of high-risk AI systems
+26(1) Deployers of high-risk AI systems shall take appropriate technical and organisational measures to ensure they use such systems in accordance with the instructions for use accompanying the systems.
+26(2) Deployers shall assign human oversight to natural persons who have the necessary competence, training and authority, as well as the necessary support.
+26(4) To the extent the deployer exercises control over the input data, it shall ensure that input data is relevant and sufficiently representative in view of the intended purpose of the high-risk AI system.
+26(5) Deployers shall monitor the operation of the high-risk AI system on the basis of the instructions for use. Where they have reason to consider that use may present a risk, they shall inform the provider or distributor and the relevant market surveillance authority without undue delay and suspend the use of the system. Where they identify a serious incident, they shall immediately inform the provider, and then the importer or distributor and the relevant market surveillance authorities. For deployers that are financial institutions subject to requirements regarding their internal governance under Union financial services law, the monitoring obligation shall be deemed fulfilled by complying with the rules on internal governance arrangements, processes and mechanisms under the relevant financial services law.
+26(6) Deployers shall keep the logs automatically generated by the high-risk AI system, to the extent such logs are under their control, for a period appropriate to the intended purpose, of at least six months, unless provided otherwise in applicable law. Financial institutions shall maintain the logs as part of the documentation kept under the relevant Union financial services law.
+26(7) Before putting into service or using a high-risk AI system at the workplace, deployers who are employers shall inform workers' representatives and the affected workers.
+26(11) Deployers of high-risk AI systems referred to in Annex III that make decisions or assist in making decisions related to natural persons shall inform the natural persons that they are subject to the use of the high-risk AI system.
+
+Article 27: Fundamental rights impact assessment for high-risk AI systems
+27(1) Prior to deploying a high-risk AI system referred to in Article 6(2), deployers that are bodies governed by public law or private entities providing public services, and deployers of high-risk AI systems referred to in points 5(b) and (c) of Annex III, shall perform an assessment of the impact on fundamental rights that the use of such system may produce. The assessment shall describe the deployer's processes, the period and frequency of use, the categories of natural persons likely to be affected, the specific risks of harm, the implementation of human oversight measures, and the measures to be taken if those risks materialise.
+
+Annex III: High-risk AI systems referred to in Article 6(2)
+Point 5: Access to and enjoyment of essential private services and essential public services and benefits:
+5(a) AI systems intended to be used by or on behalf of public authorities to evaluate the eligibility of natural persons for essential public assistance benefits and services;
+5(b) AI systems intended to be used to evaluate the creditworthiness of natural persons or establish their credit score, with the exception of AI systems used for the purpose of detecting financial fraud;
+5(c) AI systems intended to be used for risk assessment and pricing in relation to natural persons in the case of life and health insurance;
+5(d) AI systems intended to evaluate and classify emergency calls by natural persons or to dispatch or prioritise emergency first response services.`;
+
+const TESTS = {
+  1:{profile:`Sparkasse Musterstadt (fictional example bank). German regional savings bank, retail focus, ~200,000 private clients, ~1,200 employees. Uses an in-house machine-learning model to score the creditworthiness of private individuals for consumer loans and overdrafts. Loans below EUR 25,000 are approved automatically based on the score; above that, a credit officer decides using the score.`, q:""},
+  2:{profile:`Pure custody and asset servicing bank. Institutional clients only (pension funds, asset managers). No lending to natural persons. Uses AI only to detect fraudulent payment instructions and for internal document search.`, q:""},
+  3:{profile:`Sparkasse Musterstadt (fictional example bank). German regional savings bank, retail focus, ~200,000 private clients. Uses an in-house machine-learning model to score the creditworthiness of private individuals for consumer loans; small loans are approved automatically.`, q:`What is the maximum fine if we do not comply, and by which exact date must we be compliant?`}
+};
+
 const $ = id => document.getElementById(id);
 let current = 1;
+function loadTest(n){
+  current = n;
+  document.querySelectorAll('.tbtn').forEach(b=>b.classList.toggle('on', b.dataset.t==n));
+  $('src').value = AI_ACT; $('profile').value = TESTS[n].profile; $('question').value = TESTS[n].q;
+}
+document.querySelectorAll('.tbtn').forEach(b=>b.onclick=()=>loadTest(+b.dataset.t));
+loadTest(1);
+let monTimer=null, monitoring=false;
+function setOnFile(){ const names={1:'Sparkasse Musterstadt',2:'Custody bank',3:'Sparkasse Musterstadt + question'}; $('onfile').textContent=names[current]; }
+document.querySelectorAll('.tbtn').forEach(b=>b.addEventListener('click',setOnFile)); setOnFile();
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3500); }
+$('monBtn').onclick=()=>{
+  monitoring=!monitoring;
+  if(!monitoring){ clearTimeout(monTimer); $('watch').classList.remove('on'); $('watchTxt').textContent='MONITORING OFF'; $('monBtn').textContent='📡 Start monitoring'; $('monBtn').classList.remove('stop'); return; }
+  $('watch').classList.add('on'); $('watchTxt').textContent='CHECKING FEEDS…'; $('monBtn').textContent='■ Stop'; $('monBtn').classList.add('stop'); $('feedItems').innerHTML='';
+  monTimer=setTimeout(()=>{
+    const now=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    $('feedItems').innerHTML=`<div class="fitem"><span class="new">NEW</span><div><div class="t">Regulation (EU) 2024/1689: Artificial Intelligence Act</div><div class="m">Source: EUR-Lex · detected ${now} · relevant keywords: credit, AI, deployer</div></div></div>`;
+    $('watchTxt').textContent='NEW PUBLICATION: AGENT STARTED';
+    toast('🔔 New regulation detected: RegRadar starts automatically');
+    $('src').value=AI_ACT;
+    setTimeout(()=>{ $('go').click(); document.getElementById('out').scrollIntoView({behavior:'smooth',block:'start'}); },1200);
+  },4500);
+};
+$('autoMode').onchange=()=>{ const on=$('autoMode').checked; $('autoLbl').textContent= on?'Full autopilot: executes automatically':'Human approval required'; };
 $('approveAll').onclick=()=>{ document.querySelectorAll('#systems .item:not(.done)').forEach(approveItem); $('approveAll').disabled=true; };
 
 function buildPrompt(q){
@@ -230,6 +323,7 @@ HARD RULES:
 - Only facts from the tools. If something is not covered, write "Not in source". Never invent fines, deadlines, dates or figures.
 - Cite references exactly as the tools return them.
 - If the bank is not affected: say so clearly, keep "functions" and "actions" empty, explain why in provisions.
+- Address the bank by its name in emails, tasks and register entries.
 - Max 6 provisions, 5 functions, 7 actions, 4 open questions, exactly 3 exec bullets.
 
 FINAL ANSWER: ONLY valid JSON, no markdown, exactly this shape:
@@ -588,6 +682,7 @@ function addItem(sys, html){
   d.innerHTML=html+`<div class="row"><span class="st">Pending approval</span><button>Approve</button></div>`;
   d.querySelector('button').onclick=()=>approveItem(d);
   box.appendChild(d); $(cid).textContent=box.querySelectorAll('.item').length; queued++; $('approveAll').disabled=false;
+  if($('autoMode').checked){ setTimeout(()=>{ approveItem(d); const st=d.querySelector('.st'); if(st) st.textContent= sys==='mail'?'Sent ✓':'Executed ✓'; },700); }
   return 'ACT-'+String(1000+queued);
 }
 function approveItem(d){ if(d.classList.contains('done')) return; d.classList.add('done'); const st=d.querySelector('.st'); st.textContent='Executed ✓'; st.classList.add('ex'); const b=d.querySelector('button'); if(b) b.remove(); $('kQueued').textContent=document.querySelectorAll('#systems .item.done').length; }
